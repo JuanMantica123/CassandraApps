@@ -12,6 +12,7 @@ import (
 var session *gocql.Session
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 var n = 10
+var ipAndPortSeperator = " "
 
 type Tuple5 struct {
 	sourceIp        string
@@ -37,6 +38,10 @@ func init() {
 	}
 }
 
+/*
+For this application we have two tables "ports" and "usedports". "ports" contains the list of available ports on different ips,
+and also keeps track if the ports have been used or not. "usedports" keeps track of the ports that are being used
+ */
 func processPacket(tuple5 Tuple5) Tuple5 {
 	tuple5Key := create5TupleKey(tuple5)
 	iPAndPort := readFromUsedPorts(tuple5Key, session)
@@ -83,21 +88,22 @@ func selectIPAndPort() IPAndPort {
 
 func getIPsAndPorts() []IPAndPort {
 	var ipsAndPorts []IPAndPort
-	var ip string
-	var port int
+	var ipAndPortStr string
 	var ipUsed bool
 	var i = 0
 	iter := session.Query("SELECT * from ports").Iter()
 	for {
 		i++;
 		row := map[string]interface{}{
-			"ip":   &ip,
-			"port": &port,
+			"key":   &ipAndPortStr,
 			"used": &ipUsed,
 		}
 		if !iter.MapScan(row) {
 			break
 		}
+		ipAndPortArr :=strings.Split(ipAndPortStr,ipAndPortSeperator)
+		ip :=ipAndPortArr[0]
+		port,_ :=strconv.Atoi(ipAndPortArr[1])
 		if (!ipUsed) {
 			ipAndPort := IPAndPort{destinationIp: ip, destinationPort: port, used: ipUsed}
 			ipsAndPorts[i] = ipAndPort
@@ -107,10 +113,16 @@ func getIPsAndPorts() []IPAndPort {
 }
 
 func updateIpsAndPorts(ipAndPort IPAndPort) {
-	arg := fmt.Sprintf("INSERT INTO ports (ip,port,used) values (?, ?, ?)")
-	if err := session.Query(arg, ipAndPort.destinationIp, ipAndPort.destinationPort, ipAndPort.used).Exec(); err != nil {
+
+	ipAndPortKey := createIpAndPortKey(ipAndPort)
+	arg := fmt.Sprintf("INSERT INTO ports (key,used) values (?, ?)")
+	if err := session.Query(arg, ipAndPortKey, ipAndPort.used).Exec(); err != nil {
 		log.Fatal(err)
 	}
+}
+func createIpAndPortKey(ipAndPort IPAndPort)string{
+	return strings.Join([]string{ipAndPort.destinationIp, strconv.Itoa(ipAndPort.destinationPort)},ipAndPortSeperator)
+
 }
 func updateUsedPorts(tuple5Key string, ipAndPort IPAndPort) {
 	arg := fmt.Sprintf("Insert into usedports (key,ip,port)")
