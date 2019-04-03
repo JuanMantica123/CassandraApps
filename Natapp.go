@@ -1,5 +1,7 @@
 package main
-
+/*
+This app was translated to c++ do not take a look into it
+ */
 import (
 	"fmt"
 	"github.com/gocql/gocql"
